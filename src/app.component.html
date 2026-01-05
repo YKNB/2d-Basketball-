@@ -1,0 +1,135 @@
+<!-- Main game container with event listeners for aiming and shooting -->
+<div
+  class="relative w-screen h-screen bg-orange-300/80 bg-[radial-gradient(#a56d3b_1px,transparent_1px)] [background-size:16px_16px] overflow-hidden select-none"
+  (mousedown)="onPointerDown($event)"
+  (mousemove)="onPointerMove($event)"
+  (mouseup)="onPointerUp($event)"
+  (mouseleave)="onPointerUp($event)"
+  (touchstart)="onPointerDown($event)"
+  (touchmove)="onPointerMove($event)"
+  (touchend)="onPointerUp($event)"
+  (touchcancel)="onPointerUp($event)"
+>
+  <!-- Court Markings -->
+  <div class="absolute bottom-0 left-1/2 -translate-x-1/2 w-full h-full pointer-events-none">
+    <!-- 3-Point Line -->
+    <div class="absolute bottom-[-30%] left-1/2 -translate-x-1/2 w-[1200px] h-[600px] border-[3px] border-white/30 rounded-t-full"></div>
+    <!-- Key -->
+    <div class="absolute bottom-0 right-0 w-[250px] h-[300px] border-l-[3px] border-t-[3px] border-white/30"></div>
+  </div>
+
+
+  <!-- Game UI: Scoreboard and Gemini Message -->
+  <div class="absolute top-4 left-1/2 -translate-x-1/2 z-30 flex flex-col items-center gap-2 p-4 rounded-lg">
+    <div class="text-5xl font-mono text-yellow-300 bg-gray-800/80 px-6 py-2 rounded-md shadow-lg border-2 border-gray-700 tabular-nums" [class.score-pop-animation]="animateScore()">
+      <span>{{ score() }}</span>
+      <span class="text-3xl mx-2 text-yellow-300/50">/</span>
+      <span>{{ shots() }}</span>
+    </div>
+    <div class="h-12 flex items-center justify-center mt-2">
+      @if (gameState() === 'positioning') {
+        <p class="text-center font-semibold text-orange-900 bg-yellow-300/80 px-4 py-2 rounded-full shadow-sm animate-pulse">
+          Use arrow keys to move, then drag to aim.
+        </p>
+      } @else if (gameState() === 'ready') {
+        <p class="text-center font-semibold text-orange-900 bg-yellow-300/80 px-4 py-2 rounded-full shadow-sm animate-pulse">
+          Press X or C to Shoot!
+        </p>
+      } @else if (isLoadingGemini()) {
+        <div class="flex items-center gap-2 text-orange-900 bg-white/70 px-3 py-1 rounded-md">
+          <div class="w-6 h-6 border-2 border-orange-300 border-t-orange-600 rounded-full animate-spin"></div>
+          <span>Gemini is thinking...</span>
+        </div>
+      } @else if(geminiMessage()) {
+        <p class="text-center font-semibold text-orange-900 bg-white/70 px-4 py-2 rounded-full shadow-sm">
+          {{ geminiMessage() }}
+        </p>
+      }
+    </div>
+  </div>
+
+  <!-- Basketball Hoop -->
+  <div class="absolute" [style.right.px]="HOOP_POS.x" [style.top.px]="HOOP_POS.y">
+    <!-- Backboard -->
+    <div
+      class="absolute w-1 h-28 bg-white/30 backdrop-blur-sm rounded-sm shadow-lg border-2 border-white/50"
+      [style.width.px]="BACKBOARD.width"
+      [style.height.px]="BACKBOARD.height"
+    ></div>
+    <!-- Rim -->
+    <div
+      class="absolute border-4 border-red-600 rounded-b-full box-content"
+      style="border-top: none;"
+      [style.left.px]="-RIM.width"
+      [style.top.px]="BACKBOARD.height / 2"
+      [style.width.px]="RIM.width"
+      [style.height.px]="RIM.height"
+    ></div>
+    <!-- Net -->
+    <div
+      class="absolute border-l-2 border-r-2 border-b-2 border-white origin-top"
+      [class.net-swish-animation]="animateNet()"
+      style="clip-path: polygon(0 0, 100% 0, 80% 100%, 20% 100%);"
+      [style.left.px]="-RIM.width + RIM.width * 0.1"
+      [style.top.px]="BACKBOARD.height / 2 + 6"
+      [style.width.px]="RIM.width * 0.8"
+      [style.height.px]="60"
+    ></div>
+  </div>
+
+  <!-- Aiming Line -->
+  @if ((isAiming() || gameState() === 'ready') && aimLine()) {
+    <svg class="absolute inset-0 z-10 pointer-events-none">
+      <line
+        [attr.x1]="aimLine()!.x1"
+        [attr.y1]="aimLine()!.y1"
+        [attr.x2]="aimLine()!.x2"
+        [attr.y2]="aimLine()!.y2"
+        stroke="rgba(255, 255, 255, 0.7)"
+        stroke-width="3"
+        stroke-dasharray="8 8"
+      />
+    </svg>
+  }
+
+  <!-- Ball Shadow -->
+  <div
+    class="absolute w-10 h-2 bg-black/20 rounded-full z-10"
+    [style.transform]="ballShadowTransform()"
+    [style.opacity]="ballShadowOpacity()"
+  ></div>
+
+  <!-- Basketball -->
+  <div
+    #ball
+    class="absolute w-10 h-10 bg-orange-600 rounded-full z-20 shadow-lg flex items-center justify-center bg-gradient-radial from-orange-500 to-orange-700"
+    [class.cursor-pointer]="gameState() === 'positioning' || gameState() === 'ready'"
+    [style.width.px]="BALL_RADIUS * 2"
+    [style.height.px]="BALL_RADIUS * 2"
+    [style.transform]="ballTransform()"
+  >
+    <!-- Basketball lines for decoration -->
+    <div class="absolute w-full h-0.5 bg-black/30 rounded-full"></div>
+    <div class="absolute w-full h-0.5 bg-black/30 rotate-90 rounded-full"></div>
+  </div>
+
+  <!-- Confetti on Score -->
+  @for(piece of confettiPieces(); track piece.id) {
+    <div
+      class="confetti"
+      [style.left.px]="piece.left"
+      [style.top.px]="piece.top"
+      [style.background-color]="piece.color"
+      [style.animation-delay]="piece.animationDelay"
+      [style.animation-duration]="piece.animationDuration"
+    ></div>
+  }
+
+  <!-- Reset Button -->
+  @if (gameState() === 'scored' || gameState() === 'missed') {
+    <button (click)="resetShot()" class="absolute bottom-10 left-1/2 -translate-x-1/2 z-30 bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg shadow-xl transition-transform hover:scale-105 flex items-center gap-2">
+      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-rotate-cw"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>
+      Play Again
+    </button>
+  }
+</div>
